@@ -7,6 +7,9 @@ const SUGGESTED_PROMPTS = [
   "Find a cheaper alternative to Paris in spring",
 ];
 
+/** Where a prompt came from: typed in the message box, or a suggested-prompt button. */
+type PromptSource = "typed" | "suggested";
+
 function newConversationId(): string {
   return crypto.randomUUID();
 }
@@ -23,7 +26,7 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
   const [thinking, setThinking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const send = async (text: string) => {
+  const send = async (text: string, promptSource: PromptSource) => {
     const prompt = text.trim();
     if (prompt === "" || thinking) return;
     const userMessage: ChatMessage = { id: crypto.randomUUID(), role: "user", content: prompt };
@@ -32,11 +35,34 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
     setDraft("");
     setError(null);
     setThinking(true);
+    // Records whether the AI answered and how long it took. The prompt text isn't sent.
+    const turnNumber = conversation.filter((message) => message.role === "user").length;
+    const requestStartedAt = performance.now();
     try {
       const reply = await sendAssistantMessage(conversationId, conversation);
       setMessages((current) => [...current, reply.message]);
+      window.pendo?.track("assistant_reply_received", {
+        conversationId,
+        succeeded: true,
+        promptSource,
+        messageCount: conversation.length + 1,
+        turnNumber,
+        responseTimeMs: Math.round(performance.now() - requestStartedAt),
+        replyLength: reply.message.content.length,
+        errorMessage: null,
+      });
     } catch (e) {
       setError((e as Error).message);
+      window.pendo?.track("assistant_reply_received", {
+        conversationId,
+        succeeded: false,
+        promptSource,
+        messageCount: conversation.length,
+        turnNumber,
+        responseTimeMs: Math.round(performance.now() - requestStartedAt),
+        replyLength: 0,
+        errorMessage: (e as Error).message.slice(0, 100),
+      });
     } finally {
       setThinking(false);
     }
@@ -44,7 +70,7 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    void send(draft);
+    void send(draft, "typed");
   };
 
   const startNewChat = () => {
@@ -73,7 +99,7 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
             Ask me anything about planning a trip.
             <div className="suggestions">
               {SUGGESTED_PROMPTS.map((prompt) => (
-                <button key={prompt} type="button" className="secondary" onClick={() => void send(prompt)}>
+                <button key={prompt} type="button" className="secondary" onClick={() => void send(prompt, "suggested")}>
                   {prompt}
                 </button>
               ))}

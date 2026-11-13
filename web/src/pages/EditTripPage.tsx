@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { tripLengthDays } from "../analytics/tripMetrics";
 import { tripsApi, type NewTrip, type Trip } from "../api/trips";
 import { TripForm } from "../components/TripForm";
 
@@ -21,6 +22,15 @@ export function EditTripPage() {
     try {
       setError(null);
       await tripsApi.update(tripId, changes);
+      // Confirms the save succeeded and records which fields the visitor changed.
+      window.pendo?.track("trip_updated", {
+        tripId,
+        destinationChanged: trip !== null && trip.destination !== changes.destination,
+        datesChanged: trip !== null && (trip.startDate !== changes.startDate || trip.endDate !== changes.endDate),
+        travelersChanged: trip !== null && trip.travelers !== changes.travelers,
+        tripLengthDays: tripLengthDays(changes),
+        travelers: changes.travelers,
+      });
       navigate("/trips");
     } catch (e) {
       setError((e as Error).message);

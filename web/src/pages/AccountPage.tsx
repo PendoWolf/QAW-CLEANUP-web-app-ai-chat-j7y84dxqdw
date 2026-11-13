@@ -18,8 +18,17 @@ export function AccountPage() {
     event.preventDefault();
     setSaving(true);
     setMessage(null);
+    const nameChanged = name.trim() !== user.name;
+    const emailChanged = email.trim() !== user.email;
     try {
       updateUser(await usersApi.update(user.id, { name: name.trim(), email: email.trim() }));
+      // Confirms the profile save. Sends only changed-field flags, never the name or email values.
+      window.pendo?.track("profile_updated", {
+        nameChanged,
+        emailChanged,
+        role: user.role,
+        accountPlan: account.plan,
+      });
       setMessage("Profile saved.");
     } catch (e) {
       setMessage((e as Error).message);

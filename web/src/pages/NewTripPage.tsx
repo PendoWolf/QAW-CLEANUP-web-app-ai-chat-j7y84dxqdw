@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { daysUntilStart, tripLengthDays } from "../analytics/tripMetrics";
 import { tripsApi, type NewTrip } from "../api/trips";
 import { TripForm } from "../components/TripForm";
 
@@ -11,7 +12,17 @@ export function NewTripPage() {
   const createTrip = async (trip: NewTrip) => {
     try {
       setError(null);
-      await tripsApi.create(trip);
+      const created = await tripsApi.create(trip);
+      // Confirms the trip was saved, which the Add trip click alone can't show.
+      window.pendo?.track("trip_created", {
+        tripId: created.id,
+        destination: trip.destination.slice(0, 100),
+        startDate: trip.startDate,
+        endDate: trip.endDate,
+        tripLengthDays: tripLengthDays(trip),
+        travelers: trip.travelers,
+        daysUntilStart: daysUntilStart(trip),
+      });
       navigate("/trips");
     } catch (e) {
       setError((e as Error).message);
